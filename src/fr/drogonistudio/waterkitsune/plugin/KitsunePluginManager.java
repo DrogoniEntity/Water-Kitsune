@@ -1,0 +1,354 @@
+package fr.drogonistudio.waterkitsune.plugin;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.jar.JarFile;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
+import fr.drogonistudio.waterkitsune.WaterKitsuneLogger;
+
+public class KitsunePluginManager
+{
+    private static final String DEFAULT_PLUGIN_LIST_FILE = "kitsune-plugins/.enabled";
+    
+    private static KitsunePluginManager instance;
+    private final String pluginsListFile;
+    
+    private List<Entry<File, KitsunePlugin>> plugins;
+    private List<KitsunePlugin> pluginsToStopLoading;
+    
+    private PluginLoadingStatement loadingStatement;
+    private KitsunePlugin currentlyToLoad;
+    
+    public KitsunePluginManager(String pluginListFile)
+    {
+	if (instance != null)
+	    throw new IllegalStateException("Plugin manager already loaded");
+	
+	instance = this;
+	
+	if (pluginListFile != null && !pluginListFile.isEmpty())
+	    this.pluginsListFile = pluginListFile;
+	else
+	    this.pluginsListFile = DEFAULT_PLUGIN_LIST_FILE;
+	
+	this.plugins = Collections.synchronizedList(new ArrayList<>());
+	this.loadingStatement = PluginLoadingStatement.FILE_NOT_READED;
+    }
+    
+    public void readPlugins() throws IOException
+    {
+	if (this.loadingStatement != PluginLoadingStatement.FILE_NOT_READED)
+	    throw new IllegalStateException("Plugins already readed !");
+	
+	this.plugins.clear();
+	
+	File pluginsListFile = new File(this.pluginsListFile);
+	if (pluginsListFile.exists())
+	    this.plugins = this.readPluginsFromFile(pluginsListFile);
+	else
+	    this.plugins = this.readPluginsFromDirectory(pluginsListFile.getParentFile());
+	
+	this.loadingStatement = PluginLoadingStatement.FILE_READED;
+    }
+    
+    private List<Entry<File, KitsunePlugin>> readPluginsFromFile(File file) throws IOException
+    {
+	File parentDirectory = file.getParentFile();
+	List<File> pluginsFiles = new ArrayList<>();
+	
+	BufferedReader reader = null;
+	try
+	{
+	    reader = new BufferedReader(new FileReader(file));
+	    String line;
+	    
+	    while ((line = reader.readLine()) != null)
+	    {
+		if (!line.startsWith("#"))
+		{
+		    File pluginFile;
+		    Path filepath = Paths.get(line);
+		    if (filepath.isAbsolute())
+			pluginFile = new File(line);
+		    else
+			pluginFile = new File(parentDirectory, line);
+		    
+		    if (pluginFile.exists())
+			pluginsFiles.add(pluginFile);
+		    else
+			WaterKitsuneLogger.error("Plugin file \"%s\" not found", pluginFile.getName());
+		}
+	    }
+	} finally
+	{
+	    if (reader != null)
+		reader.close();
+	}
+	
+	List<Entry<File, KitsunePlugin>> entries = new ArrayList<>();
+	for (File pluginFile : pluginsFiles)
+	{
+	    try
+	    {
+		KitsunePlugin readed = parsePluginFile(pluginFile);
+		entries.add(new SimpleEntry<>(pluginFile, readed));
+	    } catch (IOException ioEx)
+	    {
+		WaterKitsuneLogger.error("Couldn't parse plugin file \"%s\" (%s)", pluginFile.getName(),
+			ioEx.getMessage());
+	    }
+	}
+	
+	return entries;
+    }
+    
+    private List<Entry<File, KitsunePlugin>> readPluginsFromDirectory(File directory)
+    {
+	List<Entry<File, KitsunePlugin>> plugins = new ArrayList<>();
+	
+	if (!directory.exists())
+	    return plugins;
+	
+	File files[] = directory.listFiles();
+	for (int i = 0; i < files.length; i++)
+	{
+	    File toRead = files[i];
+	    
+	    if (toRead.isDirectory())
+	    {
+		try
+		{
+		    KitsunePlugin readed = parsePluginFile(toRead);
+		    plugins.add(new SimpleEntry<>(toRead, readed));
+		} catch (IOException ioEx)
+		{
+		    WaterKitsuneLogger.error("Couldn't parse plugin file \"%s\" (%s)", toRead.getName(),
+			    ioEx.getMessage());
+		}
+	    } else
+	    {
+		try
+		{
+		    ZipFile isZip = new ZipFile(toRead);
+		    isZip.close();
+		    
+		    try
+		    {
+			KitsunePlugin readed = parsePluginFile(toRead);
+			plugins.add(new SimpleEntry<>(toRead, readed));
+		    } catch (IOException ioEx)
+		    {
+			WaterKitsuneLogger.error("Couldn't parse plugin file \"%s\" (%s)", toRead.getName(),
+				ioEx.getMessage());
+		    }
+		} catch (IOException ignored)
+		{
+		    // It's not a valid file
+		}
+	    }
+	}
+	
+	return plugins;
+    }
+    
+    private static KitsunePlugin parsePluginFile(File pluginFile) throws IOException
+    {
+	if (pluginFile.isDirectory())
+	{
+	    File metaFile = new File(pluginFile, "plugin.kitmeta");
+	    if (metaFile.exists())
+		return KitsunePlugin.parseFromFile(metaFile);
+	} else
+	{
+	    ZipFile pluginZip = new ZipFile(pluginFile);
+	    try
+	    {
+		ZipEntry metaEntry = pluginZip.getEntry("plugin.kitmeta");
+		
+		if (metaEntry != null)
+		    return KitsunePlugin.parseFromStream(pluginZip.getInputStream(metaEntry));
+	    } finally
+	    {
+		pluginZip.close();
+	    }
+	    
+	}
+	
+	WaterKitsuneLogger.warning("Plugin \"%s\" has no meta file", pluginFile.getName());
+	return new KitsunePlugin(pluginFile.getName());
+    }
+    
+    public void loadPlugins(Instrumentation instr) throws Exception
+    {
+	switch (this.loadingStatement)
+	{
+	    case FILE_NOT_READED:
+		throw new IllegalStateException("Plugin manager is not ready to load plugins");
+	    case LOADING:
+		throw new IllegalStateException("Loading process already started");
+	    case LOADED:
+		throw new IllegalStateException("Plugins already loaded");
+	    case FILE_READED:
+		this.loadingStatement = PluginLoadingStatement.LOADING;
+		
+		this.pluginsToStopLoading = new LinkedList<>();
+		
+		Iterator<Entry<File, KitsunePlugin>> pluginsIterator = this.plugins.iterator();
+		final String classpathSeparator = System.getProperty("path.separator");
+		
+		while (pluginsIterator.hasNext())
+		{
+		    Entry<File, KitsunePlugin> entry = pluginsIterator.next();
+		    this.currentlyToLoad = entry.getValue();
+		    
+		    File pluginFile = entry.getKey();
+		    if (pluginFile.isDirectory())
+		    {
+			pluginFile = packFile(pluginFile).toFile();
+			pluginFile.deleteOnExit();
+		    }
+		    instr.appendToSystemClassLoaderSearch(new JarFile(pluginFile));
+		    System.setProperty("java.class.path", System.getProperty("java.class.path") + classpathSeparator +  entry.getKey().getAbsolutePath());
+		    try
+		    {
+			if (this.currentlyToLoad.initializerClassName != null)
+			{
+			    WaterKitsuneLogger.info("Initialize \"%s\" (version %s)...", this.currentlyToLoad.getName(), this.currentlyToLoad.getVersion());
+			    Class<?> initializerClass = Class.forName(this.currentlyToLoad.initializerClassName);
+			    Method initMethod = initializerClass.getMethod("initialize", KitsunePlugin.class);
+			    initMethod.invoke(null, this.currentlyToLoad);
+			    WaterKitsuneLogger.info("\"%s\" initialized.", this.currentlyToLoad.getName());
+			}
+			
+		    }
+		    catch (Throwable fatal)
+		    {
+			WaterKitsuneLogger.error("Fatal error occured during \"%s\" initialization.", entry.getValue());
+			fatal.printStackTrace();
+		    }
+		}
+		
+		this.currentlyToLoad = null;
+		
+		// Unload all requested plugins want to stop
+		for (KitsunePlugin toStop : this.pluginsToStopLoading)
+		{
+		    for (int i = 0; i < this.plugins.size(); i++)
+		    {
+			Entry<File, KitsunePlugin> entry = this.plugins.get(i);
+			if (entry.getValue() == toStop)
+			{
+			    this.plugins.remove(i);
+			    return;
+			}
+		    }
+		}
+		
+		// Free memory about stopping process...
+		this.pluginsToStopLoading.clear();
+		this.pluginsToStopLoading = null;
+		
+		// Now, make list and loaders to not be able to be modified
+		this.plugins = Collections.unmodifiableList(this.plugins);
+		
+		this.loadingStatement = PluginLoadingStatement.LOADED;
+		break;
+	}
+    }
+    
+    public void stopLoading(KitsunePlugin toStop)
+    {
+	if (this.loadingStatement != PluginLoadingStatement.LOADING)
+	    throw new IllegalStateException("Couldn't stop plugin at this time");
+	if (this.currentlyToLoad != toStop)
+	    throw new IllegalStateException("Couldn't stop another plugin");
+	WaterKitsuneLogger.info("Stopping to load \"%s\"...", toStop.getName());
+	
+	this.pluginsToStopLoading.add(toStop);
+    }
+    
+    public KitsunePlugin getPlugin(String name)
+    {
+	for (int i = 0; i < this.plugins.size(); i++)
+	{
+	    KitsunePlugin plugin = this.plugins.get(i).getValue();
+	    if (plugin.getName().equals(name))
+		return plugin;
+	}
+	
+	return null;
+    }
+    
+    public List<KitsunePlugin> getPlugins()
+    {
+	List<KitsunePlugin> out = new ArrayList<>();
+	for (int i = 0; i < this.plugins.size(); i++)
+	    out.add(this.plugins.get(i).getValue());
+	
+	return Collections.unmodifiableList(out);
+    }
+    
+    public File getPluginFile(KitsunePlugin plugin)
+    {
+	for (int i = 0; i < this.plugins.size(); i++)
+	{
+	    Entry<File, KitsunePlugin> entry = this.plugins.get(i);
+	    if (entry.getValue() == plugin)
+		return entry.getKey();
+	}
+	
+	return null;
+    }
+    
+    public static final KitsunePluginManager getManager()
+    {
+	return instance;
+    }
+    
+    private static Path packFile(File directory) throws IOException
+    {
+	WaterKitsuneLogger.debug("Packaging \"%s\"...", directory.getPath());
+	Path tmpPath = Files.createTempFile("waterkitsune-", ".zip");
+	try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(tmpPath)))
+	{
+	    Path source = directory.toPath();
+	    Files.walk(source).filter((path) -> !Files.isDirectory(path)).forEach((path) -> {
+		try
+		{
+		    ZipEntry entry = new ZipEntry(source.relativize(path).toString());
+		    zipOut.putNextEntry(entry);
+		    Files.copy(path, zipOut);
+		    zipOut.closeEntry();
+		}
+		catch (IOException ioEx)
+		{
+		    WaterKitsuneLogger.error("Couldn't put entry \"%s\" into \"%s\": %s", path.toString(), tmpPath.toString(), ioEx.getMessage());
+		}
+	    });
+	}
+	
+	return tmpPath;
+    }
+    
+    private static enum PluginLoadingStatement
+    {
+	FILE_NOT_READED, FILE_READED, LOADING, LOADED;
+    }
+}
