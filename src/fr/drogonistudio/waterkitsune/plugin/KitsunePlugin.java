@@ -74,7 +74,8 @@ public final class KitsunePlugin
      * Setup informations.
      * 
      * <p>
-     * Any of this value are must be non-null except to {@code initializerClass}.
+     * Any of this value are must be non-null except to {@code initializerClass}. If
+     * description and/or version are null, default value are applied.
      * </p>
      * 
      * @param name
@@ -85,12 +86,24 @@ public final class KitsunePlugin
      *            - Plugin's version.
      * @param initializerClass
      *            - Initializer class name.
+     * @throws NullPointerException
+     *             if name is null.
      */
     protected KitsunePlugin(String name, String description, String version, String initializerClass)
+	    throws IllegalArgumentException
     {
+	if (name == null)
+	    throw new NullPointerException("Name cannot be null");
 	this.name = name;
+	
+	if (description == null)
+	    description = NO_DESCRIPTION;
 	this.description = description;
+	
+	if (version == null)
+	    version = DEFAULT_VERSION;
 	this.version = version;
+	
 	this.initializerClassName = initializerClass;
     }
     
@@ -98,9 +111,11 @@ public final class KitsunePlugin
      * Setup information with default value.
      * 
      * @param name
-     *            - Default's plugin name.
+     *            - Plugin's name.
+     * @throws NullPointerException
+     *             if name is null.
      */
-    protected KitsunePlugin(String name)
+    protected KitsunePlugin(String name) throws NullPointerException
     {
 	this(name, NO_DESCRIPTION, DEFAULT_VERSION, null);
     }
@@ -175,7 +190,8 @@ public final class KitsunePlugin
      * This method is used to perform parse job.
      * </p>
      * 
-     * @param reader - reader who point to meta file.
+     * @param reader
+     *            - reader who point to meta file.
      * @return read plugin.
      * @see #parseFromFile(File)
      * @see #parseFromStream(InputStream)
@@ -193,7 +209,7 @@ public final class KitsunePlugin
 	
 	String version = object.get("version").getAsString();
 	if (object.has("version"))
-	    description = object.get("version").getAsString();
+	    version = object.get("version").getAsString();
 	
 	String initializer = null;
 	if (object.has("initializer"))
