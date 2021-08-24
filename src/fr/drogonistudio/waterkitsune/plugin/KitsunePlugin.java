@@ -7,8 +7,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 
 /**
  * Kitsune plugin informations.
@@ -193,27 +194,22 @@ public final class KitsunePlugin
      * @param reader
      *            - reader who point to meta file.
      * @return read plugin.
+     * @throws IOException 
      * @see #parseFromFile(File)
      * @see #parseFromStream(InputStream)
      */
-    private static KitsunePlugin parse(Reader reader)
+    private static KitsunePlugin parse(Reader reader) throws IOException
     {
-	JsonParser parser = new JsonParser();
-	JsonObject object = parser.parse(reader).getAsJsonObject();
+	JsonObject object = Json.parse(reader).asObject();
 	
-	String name = object.get("name").getAsString();
+	JsonValue nameMember = object.get("name");
+	if (nameMember == null)
+	    throw new NullPointerException("Missing name member");
 	
-	String description = NO_DESCRIPTION;
-	if (object.has("description"))
-	    description = object.get("description").getAsString();
-	
-	String version = object.get("version").getAsString();
-	if (object.has("version"))
-	    version = object.get("version").getAsString();
-	
-	String initializer = null;
-	if (object.has("initializer"))
-	    initializer = object.get("initializer").getAsString();
+	String name = nameMember.asString();
+	String description = object.getString("description", NO_DESCRIPTION);
+	String version = object.getString("version", DEFAULT_VERSION);
+	String initializer = object.getString("initializer", null);
 	
 	return new KitsunePlugin(name, description, version, initializer);
     }
