@@ -23,20 +23,109 @@ import java.util.zip.ZipOutputStream;
 
 import fr.drogonistudio.waterkitsune.WaterKitsuneLogger;
 
+/**
+ * Plugin manager class.
+ * 
+ * <p>
+ * Plugin manager will store any plugin information and which files plugins
+ * point to and manage them to load, run initializer, etc.
+ * </p>
+ * 
+ * <p>
+ * Plugins are retrieved from a list file (commonly named as ".enabled"). This
+ * file will indicate which plugins to load from relative path from this file,
+ * or absolute path. During file reading, plugins informations are retrieved.
+ * After that, they are loaded and now, they are ready.
+ * </p>
+ * 
+ * @author DrogoniEntity
+ */
 public class KitsunePluginManager
 {
+    
+    /**
+     * Default plugin list file.
+     */
     private static final String DEFAULT_PLUGIN_LIST_FILE = "kitsune-plugins/.enabled";
     
+    /**
+     * Manager instance.
+     * 
+     * <p>
+     * A plugin manager can only created one time.
+     * </p>
+     */
     private static KitsunePluginManager instance;
+    
+    /**
+     * Path of list file.
+     * 
+     * <p>
+     * This list can be a directory or a text file. If it was a text file, only
+     * files who are present in this file are loaded. However, every file from this
+     * directory are loaded.
+     * </p>
+     */
     private final String pluginsListFile;
     
+    /**
+     * List of all active plugins.
+     * 
+     * <p>
+     * This list is accessible only by one thread.
+     * </p>
+     */
     private List<Entry<File, KitsunePlugin>> plugins;
+    
+    /**
+     * List of plugins who request to be unloaded.
+     */
     private List<KitsunePlugin> pluginsToStopLoading;
     
+    /**
+     * Current loading statement.
+     * 
+     * <p>
+     * There is 4 statement :
+     * </p>
+     * <ol>
+     * <li>File not reading</li>
+     * <li>File reading</li>
+     * <li>Plugins are loading</li>
+     * <li>Plugins are loaded</li>
+     * </ol>
+     * 
+     * <p>
+     * By default, the loading statement is set to "file not reading".
+     * </p>
+     */
     private PluginLoadingStatement loadingStatement;
+    
+    /**
+     * Current loading plugin.
+     */
     private KitsunePlugin currentlyToLoad;
     
-    public KitsunePluginManager(String pluginListFile)
+    /**
+     * Initialize plugin manager.
+     * 
+     * <p>
+     * It will only setup lists and constants. Plugins are not loaded. If {@code pluginListFile}
+     * is null or empty, the default value is used.
+     * </p>
+     * 
+     * <p>
+     * Plugin manager can be created only one time and this constructor can only be
+     * invoked one time.
+     * </p>
+     * 
+     * @param pluginListFile
+     *            - plugin list file.
+     * @throws IllegalStateException
+     *             when this constructor has already been invoked.
+     * @see #readPlugins() - read plugins informations
+     */
+    public KitsunePluginManager(String pluginListFile) throws IllegalStateException
     {
 	if (instance != null)
 	    throw new IllegalStateException("Plugin manager already loaded");
@@ -52,7 +141,18 @@ public class KitsunePluginManager
 	this.loadingStatement = PluginLoadingStatement.FILE_NOT_READED;
     }
     
-    public void readPlugins() throws IOException
+    /**
+     * Reading list file and loading plugins.
+     * 
+     * <p>
+     * It will clear plugins list and begin to read plugins files depends
+     * on how their are stored (if plugins are zip file or directory). It will
+     * </p>
+     * 
+     * @throws IOException if an I/O error occurred.
+     * @throws IllegalStateException if plugins already readed.
+     */
+    public void readPlugins() throws IOException, IllegalStateException
     {
 	if (this.loadingStatement != PluginLoadingStatement.FILE_NOT_READED)
 	    throw new IllegalStateException("Plugins already readed !");
@@ -60,11 +160,29 @@ public class KitsunePluginManager
 	this.plugins.clear();
 	
 	File pluginsListFile = new File(this.pluginsListFile);
-	if (pluginsListFile.exists())
-	    this.plugins = this.readPluginsFromFile(pluginsListFile);
-	else
-	    this.plugins = this.readPluginsFromDirectory(pluginsListFile.getParentFile());
 	
+	List<Entry<File, KitsunePlugin>> nextList;
+	if (pluginsListFile.exists())
+	{
+	    if (pluginsListFile.isDirectory())
+		nextList = this.readPluginsFromDirectory(pluginsListFile);
+	    else
+		nextList = this.readPluginsFromFile(pluginsListFile);
+	}
+	else
+	{
+	    boolean hasFoundValidDirectory;
+	    File directoryToUse = pluginsListFile;
+	    do
+	    {
+		directoryToUse = directoryToUse.getParentFile();
+		hasFoundValidDirectory = directoryToUse.exists();
+	    } while (hasFoundValidDirectory);
+	    
+	    nextList = this.readPluginsFromDirectory(directoryToUse);
+	}
+	
+	this.plugins.addAll(nextList);
 	this.loadingStatement = PluginLoadingStatement.FILE_READED;
     }
     
@@ -225,20 +343,21 @@ public class KitsunePluginManager
 			pluginFile.deleteOnExit();
 		    }
 		    instr.appendToSystemClassLoaderSearch(new JarFile(pluginFile));
-		    System.setProperty("java.class.path", System.getProperty("java.class.path") + classpathSeparator +  entry.getKey().getAbsolutePath());
+		    System.setProperty("java.class.path", System.getProperty("java.class.path") + classpathSeparator
+			    + entry.getKey().getAbsolutePath());
 		    try
 		    {
 			if (this.currentlyToLoad.initializerClassName != null)
 			{
-			    WaterKitsuneLogger.info("Initialize \"%s\" (version %s)...", this.currentlyToLoad.getName(), this.currentlyToLoad.getVersion());
+			    WaterKitsuneLogger.info("Initialize \"%s\" (version %s)...", this.currentlyToLoad.getName(),
+				    this.currentlyToLoad.getVersion());
 			    Class<?> initializerClass = Class.forName(this.currentlyToLoad.initializerClassName);
 			    Method initMethod = initializerClass.getMethod("initialize", KitsunePlugin.class);
 			    initMethod.invoke(null, this.currentlyToLoad);
 			    WaterKitsuneLogger.info("\"%s\" initialized.", this.currentlyToLoad.getName());
 			}
 			
-		    }
-		    catch (Throwable fatal)
+		    } catch (Throwable fatal)
 		    {
 			WaterKitsuneLogger.error("Fatal error occured during \"%s\" initialization.", entry.getValue());
 			fatal.printStackTrace();
@@ -329,17 +448,18 @@ public class KitsunePluginManager
 	try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(tmpPath)))
 	{
 	    Path source = directory.toPath();
-	    Files.walk(source).filter((path) -> !Files.isDirectory(path)).forEach((path) -> {
+	    Files.walk(source).filter((path) -> !Files.isDirectory(path)).forEach((path) ->
+	    {
 		try
 		{
 		    ZipEntry entry = new ZipEntry(source.relativize(path).toString());
 		    zipOut.putNextEntry(entry);
 		    Files.copy(path, zipOut);
 		    zipOut.closeEntry();
-		}
-		catch (IOException ioEx)
+		} catch (IOException ioEx)
 		{
-		    WaterKitsuneLogger.error("Couldn't put entry \"%s\" into \"%s\": %s", path.toString(), tmpPath.toString(), ioEx.getMessage());
+		    WaterKitsuneLogger.error("Couldn't put entry \"%s\" into \"%s\": %s", path.toString(),
+			    tmpPath.toString(), ioEx.getMessage());
 		}
 	    });
 	}
