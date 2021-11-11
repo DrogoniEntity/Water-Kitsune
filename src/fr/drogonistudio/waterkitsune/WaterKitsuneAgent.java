@@ -11,7 +11,10 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -77,7 +80,7 @@ public class WaterKitsuneAgent
 		pluginsFiles.add(manager.getPluginFile(plugin));
 	    
 	    WaterKitsuneLogger.info("Adding transformer...");
-	    instr.addTransformer(new KitsuneTransformer(pluginsFiles));
+	    instr.addTransformer(new KitsuneTransformer(pluginsFiles), instr.isRetransformClassesSupported());
 	    
 	    WaterKitsuneLogger.info("(Agent loaded)");
 	}
@@ -105,31 +108,63 @@ public class WaterKitsuneAgent
      */
     private static class KitsuneTransformer implements ClassFileTransformer
     {
+	private static final String AGENT_PACKAGE = WaterKitsuneAgent.class.getPackageName();
+	
 	/**
 	 * Buffer size used when we load classes from files.
 	 */
-	private static final int BUFFER_SIZE = 4096;
+	private static final int BUFFER_SIZE = 8192;
 	
 	/**
 	 * Files to read when we need to transform classes.
 	 */
 	private List<File> files;
 	
+	private Map<File, ZipFile> zipFiles;
+	
 	public KitsuneTransformer(List<File> files)
 	{
 	    this.files = Collections.unmodifiableList(files);
+	    this.zipFiles = new HashMap<>();
+	    
+	    for (File f : this.files)
+	    {
+		if (f.isFile())
+		{
+		    try
+		    {
+			ZipFile zf = new ZipFile(f);
+			this.zipFiles.put(f, zf);
+		    }
+		    catch (IOException ioEx)
+		    {
+			// Ignore it
+		    }
+		}
+	    }
+	    Runtime.getRuntime().addShutdownHook(new Thread(() ->
+		this.zipFiles.forEach((file, zip) -> {
+		    try
+		    {
+			zip.close();
+		    } catch (IOException ioEx) {
+			// Couldn't close
+		    }
+		}), "WaterKitsune-Shutdown"));
+	    this.zipFiles = Collections.unmodifiableMap(this.zipFiles);
 	}
 	
 	@Override
 	public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
 		ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException
 	{
-	    if (!className.startsWith("java.") && !className.startsWith("fr.drogonistudio.waterkitsune."))
+	    if (!className.startsWith("java.") && !className.startsWith("sun.") && !className.startsWith(AGENT_PACKAGE))
 	    {
+		WaterKitsuneLogger.debug(Level.FINE, "Looking at \"%s\" class", className);
 		byte[] newBuffer = this.getTransformedClass(className);
 		if (newBuffer != null)
 		{
-		    WaterKitsuneLogger.debug("Transform class \"%s\"", className);
+		    WaterKitsuneLogger.debug(Level.FINE, "Class \"%s\" transformed", className);
 		    return newBuffer;
 		}
 	    }
@@ -157,7 +192,28 @@ public class WaterKitsuneAgent
 	    for (int i = 0; i < this.files.size(); i++)
 	    {
 		File container = this.files.get(i);
-		if (container.isDirectory())
+		if (this.zipFiles.containsKey(container))
+		{
+		    try
+		    {
+			ZipFile file = this.zipFiles.get(container);
+			ZipEntry entry = file.getEntry(resource);
+			
+			if (entry != null)
+			{
+			    InputStream stream = file.getInputStream(entry);
+			    byte[] data = readFully(stream);
+			    stream.close();
+			    
+			    return data;
+			}
+		    }
+		    catch (IOException ioEx)
+		    {
+			WaterKitsuneLogger.debug(Level.SEVERE, "Failed to read class \"%s\" from Zip file \"%s\" (%s)", className, container.getName(), ioEx.getMessage());
+		    }
+		}
+		else if (container.isDirectory())
 		{
 		    File resourceFile = new File(container, resource);
 		    if (resourceFile.exists())
@@ -173,42 +229,7 @@ public class WaterKitsuneAgent
 			catch (IOException ioEx)
 			{
 			    // Ignore it
-			}
-		    }
-		}
-		else
-		{
-		    ZipFile zipFile = null;
-		    try
-		    {
-			zipFile = new ZipFile(container);
-			ZipEntry entry = zipFile.getEntry(resource);
-			
-			if (entry != null)
-			{
-			    InputStream stream = zipFile.getInputStream(entry);
-			    byte[] data = readFully(stream);
-			    stream.close();
-			    
-			    return data;
-			}
-		    }
-		    catch (IOException ioEx)
-		    {
-			// Ignored
-		    }
-		    finally
-		    {
-			if (zipFile != null)
-			{
-			    try
-			    {
-				zipFile.close();
-			    }
-			    catch (IOException ioEx)
-			    {
-				// Ignored
-			    }
+			    WaterKitsuneLogger.debug(Level.SEVERE, "Failed to read class \"%s\" from Zip file \"%s\" (%s)", className, container.getName(), ioEx.getMessage());
 			}
 		    }
 		}

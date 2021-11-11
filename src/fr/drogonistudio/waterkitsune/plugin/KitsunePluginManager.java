@@ -17,6 +17,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.jar.JarFile;
+import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -342,6 +343,7 @@ public class KitsunePluginManager
 			pluginFile = packFile(pluginFile).toFile();
 			pluginFile.deleteOnExit();
 		    }
+		    
 		    instr.appendToSystemClassLoaderSearch(new JarFile(pluginFile));
 		    System.setProperty("java.class.path", System.getProperty("java.class.path") + classpathSeparator
 			    + entry.getKey().getAbsolutePath());
@@ -443,7 +445,7 @@ public class KitsunePluginManager
     
     private static Path packFile(File directory) throws IOException
     {
-	WaterKitsuneLogger.debug("Packaging \"%s\"...", directory.getPath());
+	WaterKitsuneLogger.debug(Level.FINE, "Packaging \"%s\"...", directory.getPath());
 	Path tmpPath = Files.createTempFile("waterkitsune-", ".zip");
 	try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(tmpPath)))
 	{

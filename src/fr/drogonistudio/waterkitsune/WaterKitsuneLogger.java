@@ -27,10 +27,10 @@ public final class WaterKitsuneLogger
 	LOGGER.severe(PREFIX.concat(String.format(format, args)));
     }
     
-    public static void debug(String format, Object... args)
+    public static void debug(Level logLevel, String format, Object... args)
     {
 	if (System.getProperty("waterkitsune.debug") != null)
-	    LOGGER.info(PREFIX.concat(String.format(format, args)));
+	    LOGGER.log(logLevel, PREFIX.concat(String.format(format, args)));
     }
     
     static
