@@ -26,8 +26,10 @@ import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager;
  * 
  * @author DrogoniEntity
  */
-public class WaterKitsuneAgent
+public final class WaterKitsuneAgent
 {
+    private static final String VERSION = "1.1";
+    
     /**
      * Premain method.
      * 
@@ -35,8 +37,10 @@ public class WaterKitsuneAgent
      * It will simply invoke {@code agentstart()}. No extra job is made.
      * </p>
      * 
-     * @param agentArgs - Argument used when launching agent (unused).
-     * @param instr - Instrumentation used during JVM's life-cycle.
+     * @param agentArgs
+     *            - Argument used when launching agent (unused).
+     * @param instr
+     *            - Instrumentation used during JVM's life-cycle.
      */
     public static void premain(String agentArgs, Instrumentation instr)
     {
@@ -47,16 +51,18 @@ public class WaterKitsuneAgent
      * Initialize process.
      * 
      * <p>
-     * It will load plugins and register custom transformer to {@code instr}.
-     * If something went wrong during initialization, transformer will not be applied. 
+     * It will load plugins and register custom transformer to {@code instr}. If
+     * something went wrong during initialization, transformer will not be applied.
      * </p>
      * 
-     * @param agentArgs - Argument used when launching agent (unused).
-     * @param instr - Instrumentation used during JVM's life-cycle. 
+     * @param agentArgs
+     *            - Argument used when launching agent (unused).
+     * @param instr
+     *            - Instrumentation used during JVM's life-cycle.
      */
     public static void agentstart(String agentArgs, Instrumentation instr)
     {
-	WaterKitsuneLogger.info("(Agent ver. 1.0.2)");
+	WaterKitsuneLogger.info("(Agent ver. %s)", VERSION);
 	
 	KitsunePluginManager manager = new KitsunePluginManager(agentArgs);
 	
@@ -68,23 +74,26 @@ public class WaterKitsuneAgent
 		OpenExporterModulesHack.openExport(instr);
 	    }
 	    
-	    // Initialize plugins...
+	    // Reading installed plugins
 	    WaterKitsuneLogger.info("Setting up plugins...");
 	    manager.readPlugins();
+	    
+	    // Setup transformer to allow transforming earlier as possible
+	    WaterKitsuneLogger.info("Adding transformer...");
+	    KitsuneTransformer transformer = new KitsuneTransformer(pluginsFilesList(manager));
+	    instr.addTransformer(transformer, instr.isRetransformClassesSupported());
+	    
+	    // Now initialize plugins
 	    manager.loadPlugins(instr);
 	    
-	    // With loaded plugins, we will setup transformer...
-	    List<KitsunePlugin> plugins = manager.getPlugins();
-	    List<File> pluginsFiles = new ArrayList<>(plugins.size());
-	    for (KitsunePlugin plugin : plugins)
-		pluginsFiles.add(manager.getPluginFile(plugin));
+	    // Now, update opened files list since some plugins have been disabled
+	    WaterKitsuneLogger.info("Updating plugins list...");
+	    transformer.updateOpenedFilesList(pluginsFilesList(manager));
+	    transformer.freezeFilesList();
 	    
-	    WaterKitsuneLogger.info("Adding transformer...");
-	    instr.addTransformer(new KitsuneTransformer(pluginsFiles), instr.isRetransformClassesSupported());
-	    
+	    // Now, we are ready !
 	    WaterKitsuneLogger.info("(Agent loaded)");
-	}
-	catch (Throwable t)
+	} catch (Throwable t)
 	{
 	    WaterKitsuneLogger.error("Fatal error occured during agent initialization !");
 	    t.printStackTrace();
@@ -92,22 +101,40 @@ public class WaterKitsuneAgent
 	}
     }
     
+    private static List<File> pluginsFilesList(KitsunePluginManager manager)
+    {
+	List<KitsunePlugin> plugins = manager.getPlugins();
+	List<File> files = new ArrayList<>(plugins.size());
+	
+	for (KitsunePlugin plugin : plugins)
+	    files.add(manager.getPluginFile(plugin));
+	
+	return files;
+    }
+    
+    public static String getVersion()
+    {
+	return VERSION;
+    }
+    
     /**
      * Plugin transformer.
      * 
      * <p>
-     * With loaded plugins, it will transform classes by loading alternative classes in plugins' file.
+     * With loaded plugins, it will transform classes by loading alternative classes
+     * in plugins' file.
      * </p>
      * 
      * <p>
-     * Only, classes when their name start with {@code java. } or {@code fr.drogonistudio.waterkitsune. } are ignored
-     * by it.
+     * Only, classes when their name start with {@code java. } or
+     * {@code fr.drogonistudio.waterkitsune. } are ignored by it.
      * </p>
      * 
      * @author DrogoniEntity
      */
     private static class KitsuneTransformer implements ClassFileTransformer
     {
+	
 	private static final String AGENT_PACKAGE = WaterKitsuneAgent.class.getPackageName();
 	
 	/**
@@ -124,7 +151,7 @@ public class WaterKitsuneAgent
 	
 	public KitsuneTransformer(List<File> files)
 	{
-	    this.files = Collections.unmodifiableList(files);
+	    this.files = files;
 	    this.zipFiles = new HashMap<>();
 	    
 	    for (File f : this.files)
@@ -135,22 +162,19 @@ public class WaterKitsuneAgent
 		    {
 			ZipFile zf = new ZipFile(f);
 			this.zipFiles.put(f, zf);
-		    }
-		    catch (IOException ioEx)
+		    } catch (IOException ioEx)
 		    {
 			// Ignore it
 		    }
 		}
 	    }
-	    Runtime.getRuntime().addShutdownHook(new Thread(() ->
-		this.zipFiles.forEach((file, zip) -> {
-		    try
-		    {
-			zip.close();
-		    } catch (IOException ioEx) {
-			// Couldn't close
-		    }
-		}), "WaterKitsune-Shutdown"));
+	    Runtime.getRuntime().addShutdownHook(new Thread(() -> this.zipFiles.forEach((file, zip) ->
+	    	{
+	    	    // @formatter:off
+	    	    try { zip.close(); }
+	    	    catch (IOException ignored) {}
+	    	    // @formatter:on
+	    	}), "WaterKitsune-Shutdown"));
 	    this.zipFiles = Collections.unmodifiableMap(this.zipFiles);
 	}
 	
@@ -182,8 +206,10 @@ public class WaterKitsuneAgent
 	 * If nothing is found, {@code null} is returned.
 	 * </p>
 	 * 
-	 * @param className - Class to load.
-	 * @return new class data or {@code null} if plugins doesn't have custom data for {@code className}.
+	 * @param className
+	 *            - Class to load.
+	 * @return new class data or {@code null} if plugins doesn't have custom data
+	 *         for {@code className}.
 	 */
 	private byte[] getTransformedClass(String className)
 	{
@@ -207,13 +233,12 @@ public class WaterKitsuneAgent
 			    
 			    return data;
 			}
-		    }
-		    catch (IOException ioEx)
+		    } catch (IOException ioEx)
 		    {
-			WaterKitsuneLogger.debug(Level.SEVERE, "Failed to read class \"%s\" from Zip file \"%s\" (%s)", className, container.getName(), ioEx.getMessage());
+			WaterKitsuneLogger.debug(Level.SEVERE, "Failed to read class \"%s\" from Zip file \"%s\" (%s)",
+				className, container.getName(), ioEx.getMessage());
 		    }
-		}
-		else if (container.isDirectory())
+		} else if (container.isDirectory())
 		{
 		    File resourceFile = new File(container, resource);
 		    if (resourceFile.exists())
@@ -225,11 +250,12 @@ public class WaterKitsuneAgent
 			    stream.close();
 			    
 			    return data;
-			}
-			catch (IOException ioEx)
+			} catch (IOException ioEx)
 			{
 			    // Ignore it
-			    WaterKitsuneLogger.debug(Level.SEVERE, "Failed to read class \"%s\" from Zip file \"%s\" (%s)", className, container.getName(), ioEx.getMessage());
+			    WaterKitsuneLogger.debug(Level.SEVERE,
+				    "Failed to read class \"%s\" from Zip file \"%s\" (%s)", className,
+				    container.getName(), ioEx.getMessage());
 			}
 		    }
 		}
@@ -246,9 +272,11 @@ public class WaterKitsuneAgent
 	 * file reading, an exception is thrown.
 	 * </p>
 	 * 
-	 * @param stream - File's stream.
+	 * @param stream
+	 *            - File's stream.
 	 * @return read bytes.
-	 * @throws IOException - if something went wring during file reading.
+	 * @throws IOException
+	 *             - if something went wring during file reading.
 	 */
 	private static byte[] readFully(InputStream stream) throws IOException
 	{
@@ -260,6 +288,31 @@ public class WaterKitsuneAgent
 		baos.write(buffer, 0, readed);
 	    
 	    return baos.toByteArray();
+	}
+	
+	void updateOpenedFilesList(List<File> filesToKeep)
+	{
+	    for (File file : filesToKeep)
+	    {
+		if (!this.files.contains(file))
+		{
+		    this.files.remove(file);
+		    ZipFile zipFile = this.zipFiles.get(file);
+		    if (zipFile != null)
+		    {
+			// @formatter:off
+			try { zipFile.close(); }
+			catch (IOException ignored) {}
+			// @formatter:on
+		    }
+		}
+	    }
+	}
+	
+	void freezeFilesList()
+	{
+	    this.files = Collections.unmodifiableList(this.files);
+	    this.zipFiles = Collections.unmodifiableMap(this.zipFiles);
 	}
     }
 }
