@@ -30,7 +30,7 @@ import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager
  */
 public final class WaterKitsuneAgent
 {
-    private static final String VERSION = "1.1";
+    private static final String VERSION = "1.2";
     
     /**
      * Premain method.
