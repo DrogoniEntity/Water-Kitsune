@@ -6,6 +6,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager;
+import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager.PluginLoadingStatement;
+
 /**
  * {@link LightKistuneTransformer} manager.
  * 
@@ -149,7 +152,7 @@ public class LightKitsuneTransformManager
      * @param classBeingRedefined
      *            - class to transform
      * @param classFileBuffer
-     * 		  - incoming class data
+     *            - incoming class data
      * @return transformed class data
      */
     public synchronized byte[] apply(Class<?> classBeingRedefined, byte classFileBuffer[])
@@ -178,7 +181,8 @@ public class LightKitsuneTransformManager
      * If their are locked, an exception will be thrown.
      * </p>
      * 
-     * @throws IllegalStateException if registrations are locked
+     * @throws IllegalStateException
+     *             if registrations are locked
      */
     private void checkRegistrationsLocked() throws IllegalStateException
     {
@@ -188,11 +192,16 @@ public class LightKitsuneTransformManager
     
     /**
      * Lock registrations.
+     * 
+     * <p>
+     * This method act only if plugins are loaded. It should be used only by agent
+     * for internal purpose.
+     * </p>
      */
-    public void lockRegistration()
+    public void lockRegistrations()
     {
-	// TODO Allow to lock only plugin manager has finished its loading.
-	this.registerationLocked.set(true);
+	if (KitsunePluginManager.getManager().getLoadingStatement() == PluginLoadingStatement.LOADED)
+	    this.registerationLocked.set(true);
     }
     
     /**

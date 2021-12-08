@@ -452,6 +452,11 @@ public class KitsunePluginManager
 	return null;
     }
     
+    public PluginLoadingStatement getLoadingStatement()
+    {
+	return this.loadingStatement;
+    }
+    
     public static final KitsunePluginManager getManager()
     {
 	return instance;
@@ -483,7 +488,7 @@ public class KitsunePluginManager
 	return tmpPath;
     }
     
-    private static enum PluginLoadingStatement
+    public static enum PluginLoadingStatement
     {
 	FILE_NOT_READED, FILE_READED, LOADING, LOADED;
     }
