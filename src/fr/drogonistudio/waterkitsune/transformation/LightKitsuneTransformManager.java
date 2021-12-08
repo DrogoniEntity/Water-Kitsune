@@ -50,7 +50,7 @@ public class LightKitsuneTransformManager
      * with a class.
      * </p>
      */
-    private final Map<Class<?>, Set<LightKitsuneTransformer>> transformers;
+    private final Map<String, Set<LightKitsuneTransformer>> transformers;
     
     /**
      * Registration locker.
@@ -98,13 +98,13 @@ public class LightKitsuneTransformManager
 	this.checkRegistrationsLocked();
 	
 	Set<LightKitsuneTransformer> transformerSet;
-	if (!this.transformers.containsKey(targetClass))
+	if (!this.transformers.containsKey(targetClass.getName()))
 	{
 	    transformerSet = ConcurrentHashMap.newKeySet();
-	    this.transformers.put(targetClass, transformerSet);
+	    this.transformers.put(targetClass.getName(), transformerSet);
 	} else
 	{
-	    transformerSet = this.transformers.get(targetClass);
+	    transformerSet = this.transformers.get(targetClass.getName());
 	}
 	
 	transformerSet.add(transformer);
@@ -131,9 +131,9 @@ public class LightKitsuneTransformManager
     {
 	this.checkRegistrationsLocked();
 	
-	if (this.transformers.containsKey(targetClass))
+	if (this.transformers.containsKey(targetClass.getName()))
 	{
-	    this.transformers.get(targetClass).remove(transformer);
+	    this.transformers.get(targetClass.getName()).remove(transformer);
 	}
     }
     
@@ -159,9 +159,9 @@ public class LightKitsuneTransformManager
     public synchronized byte[] apply(Class<?> classBeingRedefined, byte classFileBuffer[])
     {
 	// Apply only if there is some registered transformed
-	if (this.transformers.containsKey(classBeingRedefined))
+	if (this.transformers.containsKey(classBeingRedefined.getName()))
 	{
-	    Iterator<LightKitsuneTransformer> iterator = this.transformers.get(classBeingRedefined).iterator();
+	    Iterator<LightKitsuneTransformer> iterator = this.transformers.get(classBeingRedefined.getName()).iterator();
 	    while (iterator.hasNext())
 	    {
 		byte nextBuffer[] = iterator.next().transform(classBeingRedefined, classFileBuffer);
