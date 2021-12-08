@@ -21,6 +21,7 @@ import java.util.List;
 
 import fr.drogonistudio.waterkitsune.plugin.KitsunePlugin;
 import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager;
+import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager;
 
 /**
  * Agent program.
@@ -65,7 +66,8 @@ public final class WaterKitsuneAgent
     {
 	WaterKitsuneLogger.info("(Agent ver. %s)", VERSION);
 	
-	KitsunePluginManager manager = new KitsunePluginManager(agentArgs);
+	final KitsunePluginManager pluginManager = new KitsunePluginManager(agentArgs);
+	final LightKitsuneTransformManager lightTransforms = new LightKitsuneTransformManager();
 	
 	try
 	{
@@ -77,19 +79,19 @@ public final class WaterKitsuneAgent
 	    
 	    // Reading installed plugins
 	    WaterKitsuneLogger.info("Setting up plugins...");
-	    manager.readPlugins();
+	    pluginManager.readPlugins();
 	    
 	    // Setup transformer to allow transforming earlier as possible
 	    WaterKitsuneLogger.info("Adding transformer...");
-	    KitsuneTransformer transformer = new KitsuneTransformer(pluginsFilesList(manager));
+	    KitsuneTransformer transformer = new KitsuneTransformer(pluginsFilesList(pluginManager), lightTransforms);
 	    instr.addTransformer(transformer, instr.isRetransformClassesSupported());
 	    
 	    // Now initialize plugins
-	    manager.loadPlugins(instr);
+	    pluginManager.loadPlugins(instr);
 	    
 	    // Now, update opened files list since some plugins have been disabled
 	    WaterKitsuneLogger.info("Updating plugins list...");
-	    transformer.updateOpenedFilesList(pluginsFilesList(manager));
+	    transformer.updateOpenedFilesList(pluginsFilesList(pluginManager));
 	    transformer.freezeFilesList();
 	    
 	    // Now, we are ready !

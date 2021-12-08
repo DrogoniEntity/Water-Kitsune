@@ -65,6 +65,7 @@ public class LightKitsuneTransformManager
 	if (instance != null)
 	    throw new IllegalStateException("Light transformer manager already created");
 	
+	instance = this;
 	this.transformers = new ConcurrentHashMap<>();
 	this.registerationLocked = new AtomicBoolean(false);
     }

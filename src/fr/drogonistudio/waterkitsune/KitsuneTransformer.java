@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +16,8 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager;
 
 /**
  * Plugin transformer.
@@ -51,7 +54,9 @@ class KitsuneTransformer implements ClassFileTransformer
      */
     private Map<File, ZipFile> zipFiles;
     
-    public KitsuneTransformer(List<File> files)
+    private final LightKitsuneTransformManager lightTransformers;
+    
+    public KitsuneTransformer(List<File> files, LightKitsuneTransformManager lightTransformers)
     {
 	this.files = files;
 	this.zipFiles = new HashMap<>();
@@ -73,11 +78,12 @@ class KitsuneTransformer implements ClassFileTransformer
 	Runtime.getRuntime().addShutdownHook(new Thread(() -> this.zipFiles.forEach((file, zip) ->
 	{
 	    // @formatter:off
-        	    try { zip.close(); }
-        	    catch (IOException ignored) {}
-        	    // @formatter:on
+    	    try { zip.close(); }
+    	    catch (IOException ignored) {}
+    	    // @formatter:on
 	}), "WaterKitsune-Shutdown"));
-	this.zipFiles = Collections.unmodifiableMap(this.zipFiles);
+	
+	this.lightTransformers = lightTransformers;
     }
     
     @Override
@@ -87,8 +93,25 @@ class KitsuneTransformer implements ClassFileTransformer
 	if (!className.startsWith("java.") && !className.startsWith("sun.") && !className.startsWith(AGENT_PACKAGE))
 	{
 	    WaterKitsuneLogger.debug(Level.FINE, "Looking at \"%s\" class", className);
-	    byte[] newBuffer = this.getTransformedClass(className);
+	    
+	    // Flag to notify it has been changed
+	    boolean changed = false;
+	    
+	    // Reading from files
+	    byte[] newBuffer = this.getHardTransformedClass(className);
 	    if (newBuffer != null)
+		changed = true;
+	    else
+		// No change, reset newBuffer to current data
+		newBuffer = classfileBuffer;
+	    
+	    // Applying light transformers
+	    newBuffer = this.lightTransformers.apply(classBeingRedefined, newBuffer);
+	    if (!changed && !Arrays.equals(classfileBuffer, newBuffer))
+		changed = true;
+	    
+	    // Log debug message to indicate we have transformed 'className'
+	    if (changed)
 	    {
 		WaterKitsuneLogger.debug(Level.FINE, "Class \"%s\" transformed", className);
 		return newBuffer;
@@ -113,7 +136,7 @@ class KitsuneTransformer implements ClassFileTransformer
      * @return new class data or {@code null} if plugins doesn't have custom data
      *         for {@code className}.
      */
-    private byte[] getTransformedClass(String className)
+    private byte[] getHardTransformedClass(String className)
     {
 	String resource = className.replace('.', '/').concat(".class");
 	
