@@ -82,7 +82,7 @@ class KitsuneTransformer implements ClassFileTransformer
     	    catch (IOException ignored) {}
     	    // @formatter:on
 	}), "WaterKitsune-Shutdown"));
-	
+	    
 	this.lightTransformers = lightTransformers;
     }
     
@@ -106,7 +106,7 @@ class KitsuneTransformer implements ClassFileTransformer
 		newBuffer = classfileBuffer;
 	    
 	    // Applying light transformers
-	    newBuffer = this.lightTransformers.apply(classBeingRedefined, newBuffer);
+	    newBuffer = this.lightTransformers.apply(className, newBuffer);
 	    if (!changed && !Arrays.equals(classfileBuffer, newBuffer))
 		changed = true;
 	    

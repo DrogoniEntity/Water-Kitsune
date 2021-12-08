@@ -34,9 +34,9 @@ public interface LightKitsuneTransformer
      * registered from {@link LightKitsuneTransformManager}.
      * </p>
      * 
-     * @param classBeingRedefined - class which will be transformed
+     * @param className - class's name
      * @param classFileBuffer - class's data
      * @return new class data (transformed class data)
      */
-    public byte[] transform(Class<?> classBeingRedefined, byte classFileBuffer[]);
+    public byte[] transform(String className, byte classFileBuffer[]);
 }
