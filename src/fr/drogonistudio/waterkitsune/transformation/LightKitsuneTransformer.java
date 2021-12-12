@@ -35,8 +35,8 @@ public interface LightKitsuneTransformer
      * </p>
      * 
      * @param className - class's name
-     * @param classFileBuffer - class's data
+     * @param classfileBuffer - class's data
      * @return new class data (transformed class data)
      */
-    public byte[] transform(String className, byte classFileBuffer[]);
+    public byte[] transform(String className, byte classfileBuffer[]);
 }

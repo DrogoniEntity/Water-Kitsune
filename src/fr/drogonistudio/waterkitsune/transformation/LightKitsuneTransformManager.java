@@ -88,8 +88,8 @@ public class LightKitsuneTransformManager
      * {@code transformer} again but with another class to transform.
      * </p>
      * 
-     * @param targetClass
-     *            - class to transform
+     * @param targetClassName
+     *            - class's name to transform
      * @param transformer
      *            - transformer to register
      * @throws IllegalStateException
@@ -97,24 +97,26 @@ public class LightKitsuneTransformManager
      * @throws NullPointerException
      *             if {@code transformer} is null
      */
-    public synchronized void registerTransformer(Class<?> targetClass, LightKitsuneTransformer transformer)
+    public synchronized void registerTransformer(String targetClassName, LightKitsuneTransformer transformer)
 	    throws IllegalStateException, NullPointerException
     {
 	this.checkRegistrationsLocked();
 	if (transformer == null)
 	    throw new NullPointerException("transformer is null");
 	
+	targetClassName = targetClassName.replace('.', '/');
 	Set<LightKitsuneTransformer> transformerSet;
-	if (!this.transformers.containsKey(targetClass.getName()))
+	if (!this.transformers.containsKey(targetClassName))
 	{
 	    transformerSet = ConcurrentHashMap.newKeySet();
-	    this.transformers.put(targetClass.getName(), transformerSet);
+	    this.transformers.put(targetClassName, transformerSet);
 	} else
 	{
-	    transformerSet = this.transformers.get(targetClass.getName());
+	    transformerSet = this.transformers.get(targetClassName);
 	}
 	
 	transformerSet.add(transformer);
+	WaterKitsuneLogger.debug(Level.FINE, "Add light transformer (%s -> %s)", transformer.getClass().getName(), targetClassName);
     }
     
     /**
@@ -126,8 +128,8 @@ public class LightKitsuneTransformManager
      * registered with another class.
      * </p>
      * 
-     * @param targetClass
-     *            - class to transform
+     * @param targetClassName
+     *            - class's name to transform
      * @param transformer
      *            - transformer to remove
      * @throws IllegalStateException
@@ -135,17 +137,20 @@ public class LightKitsuneTransformManager
      * @throws NullPointerException
      *             if {@code transformer} is null
      */
-    public synchronized void unregisterTransformer(Class<?> targetClass, LightKitsuneTransformer transformer)
+    public synchronized void unregisterTransformer(String targetClassName, LightKitsuneTransformer transformer)
 	    throws IllegalStateException
     {
 	this.checkRegistrationsLocked();
 	if (transformer == null)
 	    throw new NullPointerException("transformer is null");
+	targetClassName = targetClassName.replace('.', '/');
 	
-	if (this.transformers.containsKey(targetClass.getName()))
+	if (this.transformers.containsKey(targetClassName))
 	{
-	    this.transformers.get(targetClass.getName()).remove(transformer);
+	    this.transformers.get(targetClassName).remove(transformer);
 	}
+	
+	WaterKitsuneLogger.debug(Level.FINE, "Remove light transformer (%s -> %s)", transformer.getClass().getName(), targetClassName);
     }
     
     /**
@@ -161,13 +166,13 @@ public class LightKitsuneTransformManager
      * This method should be used only by agent.
      * </p>
      * 
-     * @param classBeingRedefined
-     *            - class to transform
-     * @param classFileBuffer
+     * @param className
+     *            - class's name to transform
+     * @param classfileBuffer
      *            - incoming class data
      * @return transformed class data
      */
-    public synchronized byte[] apply(String className, byte classFileBuffer[])
+    public synchronized byte[] apply(String className, byte classfileBuffer[])
     {
 	// Apply only if there is some registered transformed
 	if (this.transformers.containsKey(className))
@@ -181,11 +186,14 @@ public class LightKitsuneTransformManager
 		
 		try
 		{
-		    byte nextBuffer[] = transformer.transform(className, classFileBuffer);
+		    byte nextBuffer[] = transformer.transform(className, classfileBuffer);
 		    
 		    // Transformation will be effective only if transformer return something
 		    if (nextBuffer != null)
-			classFileBuffer = nextBuffer;
+		    {
+			classfileBuffer = nextBuffer;
+			WaterKitsuneLogger.debug(Level.FINE, "Light transformation proceed");
+		    }
 		} catch (Throwable t)
 		{
 		    WaterKitsuneLogger.error("Failed to apply light transformer \"%s\"", transformerName);
@@ -194,7 +202,7 @@ public class LightKitsuneTransformManager
 	    }
 	}
 	
-	return classFileBuffer;
+	return classfileBuffer;
     }
     
     /**
