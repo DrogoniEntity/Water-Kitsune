@@ -88,6 +88,7 @@ public final class WaterKitsuneAgent
 	    
 	    // Now initialize plugins
 	    pluginManager.loadPlugins(instr);
+	    lightTransforms.lockRegistrations();
 	    
 	    // Now, update opened files list since some plugins have been disabled
 	    WaterKitsuneLogger.info("Updating plugins list...");
