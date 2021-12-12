@@ -50,6 +50,7 @@ import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager.PluginLoadingSt
  * 
  * @author DrogoniEntity
  * @see LightKitsuneTransformer
+ * @since 1.2
  */
 public class LightKitsuneTransformManager
 {

@@ -32,6 +32,7 @@ package fr.drogonistudio.waterkitsune.transformation;
  * 
  * @author DrogoniEntity
  * @see LightKitsuneTransformManager
+ * @since 1.2
  */
 public interface LightKitsuneTransformer
 {
