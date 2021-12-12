@@ -98,8 +98,7 @@ public final class WaterKitsuneAgent
 	    WaterKitsuneLogger.info("(Agent loaded)");
 	} catch (Throwable t)
 	{
-	    WaterKitsuneLogger.error("Fatal error occured during agent initialization !");
-	    t.printStackTrace();
+	    WaterKitsuneLogger.thrown("Fatal error occured during agent initialization !", t);
 	    WaterKitsuneLogger.error("Class transformation couldn't be applied.");
 	}
     }

@@ -196,8 +196,7 @@ public class LightKitsuneTransformManager
 		    }
 		} catch (Throwable t)
 		{
-		    WaterKitsuneLogger.error("Failed to apply light transformer \"%s\"", transformerName);
-		    t.printStackTrace();
+		    WaterKitsuneLogger.thrown(String.format("Failed to apply light transformer \"%s\"", transformerName), t);
 		}
 	    }
 	}

@@ -375,8 +375,7 @@ public class KitsunePluginManager
 			
 		    } catch (Throwable fatal)
 		    {
-			WaterKitsuneLogger.error("Fatal error occured during \"%s\" initialization.", entry.getValue());
-			fatal.printStackTrace();
+			WaterKitsuneLogger.thrown(String.format("Fatal error occured during \"%s\" initialization.", entry.getValue()), fatal);
 		    }
 		}
 		

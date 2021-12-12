@@ -47,6 +47,11 @@ public final class WaterKitsuneLogger
 	    LOGGER.log(logLevel, PREFIX.concat(String.format(format, args)));
     }
     
+    public static void thrown(String message, Throwable throwable)
+    {
+	LOGGER.log(Level.SEVERE, message, throwable);
+    }
+    
     static
     {
 	LOGGER.setLevel(Level.ALL);
