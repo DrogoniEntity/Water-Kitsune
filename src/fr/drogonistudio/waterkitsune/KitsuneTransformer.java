@@ -37,7 +37,21 @@ import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager
 class KitsuneTransformer implements ClassFileTransformer
 {
     
-    private static final String AGENT_PACKAGE = WaterKitsuneAgent.class.getPackageName();
+    private static final String AGENT_PACKAGE = WaterKitsuneAgent.class.getPackageName().replace('.', '/');
+    
+    /**
+     * List of all excluded packages.
+     * 
+     * <p>
+     * Classes from these packages should not be transformed.
+     * </p>
+     */
+    private static final String[] PACKAGES_EXCLUDED = new String[] {
+	    "java/",
+	    "sun/",
+	    "javax/",
+	    AGENT_PACKAGE
+    };
     
     /**
      * Buffer size used when we load classes from files.
@@ -54,6 +68,9 @@ class KitsuneTransformer implements ClassFileTransformer
      */
     private Map<File, ZipFile> zipFiles;
     
+    /**
+     * Light transformer manager reference.
+     */
     private final LightKitsuneTransformManager lightTransformers;
     
     public KitsuneTransformer(List<File> files, LightKitsuneTransformManager lightTransformers)
@@ -90,7 +107,7 @@ class KitsuneTransformer implements ClassFileTransformer
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
 	    ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException
     {
-	if (!className.startsWith("java.") && !className.startsWith("sun.") && !className.startsWith(AGENT_PACKAGE))
+	if (!isExculuded(className))
 	{
 	    WaterKitsuneLogger.debug(Level.FINE, "Looking at \"%s\" class", className);
 	    
@@ -237,5 +254,27 @@ class KitsuneTransformer implements ClassFileTransformer
     {
 	this.files = Collections.unmodifiableList(this.files);
 	this.zipFiles = Collections.unmodifiableMap(this.zipFiles);
+    }
+    
+    /**
+     * Check if {@className} is located inside a excluded package.
+     * 
+     * <p>
+     * If it was the case, this class may not be transformed.
+     * </p>
+     * 
+     * @param className - class's name to check
+     * @return {@code true} if class is located inside a excluded packages.
+     * @see #PACKAGES_EXCLUDED
+     */
+    private static boolean isExculuded(String className)
+    {
+	for (int i = 0; i < PACKAGES_EXCLUDED.length; i++)
+	{
+	    if (className.startsWith(PACKAGES_EXCLUDED[i]))
+		return true;
+	}
+	
+	return false;
     }
 }
