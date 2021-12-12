@@ -78,6 +78,20 @@ This manager allow you to perform some operation on patches like :
 
 That's all !
 
+### Light Transformer
+From Water-Kitsune 1.2, a new concept of "Light Transformer" has been added. It allow to plugins to applied small modifications into a class without needed to rewrite the targeted class completely.
+
+To use it, you will need to create a class which implements the interface `LightKitsuneTransformer`, this interface contains 1 method :
+```java
+public byte[] transform(String, byte[]);
+```
+This method will applied a couple of magic operations which will transform incoming class data (`byte[]` parameters) and return transformed data. In some the most case, you may need to use additionnals libraries to perform your magic operations like [ASM](https://asm.ow2.io/) or [Byte Buddy](https://bytebuddy.net/).
+
+After you created your light transformer, to register it, you will need to use `LightKitsuneTransformManager.registerTransformer(String, LightKitsuneTransform)`. Like [Patch manager](#patch-manager), you can acceed to this manager with :
+```java
+public LightKitsuneTransformManager getManager()
+```
+
 ## Third-party
 Water-Kitsune use :
 - ["minimal-json"](https://github.com/ralfstx/minimal-json) to perform patches' description parsing
