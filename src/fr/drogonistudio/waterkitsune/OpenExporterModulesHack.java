@@ -1,6 +1,6 @@
 /*
- * Water-Kitsune - Java Agent
- * Copyright (C) 2021 - Drogoni-Studio
+ * Water-Kitsune, a simple patch loader
+ * Copyright (C) 2021  Drogoni-Studio
 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
