@@ -214,7 +214,8 @@ public class KitsunePluginManager
 	    
 	    while ((line = reader.readLine()) != null)
 	    {
-		if (!line.startsWith("#"))
+		line = line.trim();
+		if (!line.startsWith("#") && !line.isEmpty())
 		{
 		    File pluginFile;
 		    Path filepath = Paths.get(line);
