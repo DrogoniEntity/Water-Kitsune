@@ -201,7 +201,11 @@ public class LightKitsuneTransformManager
 		
 		try
 		{
-		    byte nextBuffer[] = transformer.transform(className, classfileBuffer);
+		    // Clone buffer to avoid transformers to directly modify buffer
+		    byte buffer[] = new byte[classfileBuffer.length];
+		    System.arraycopy(classfileBuffer, 0, buffer, 0, classfileBuffer.length);
+		    
+		    byte nextBuffer[] = transformer.transform(className, buffer);
 		    
 		    // Transformation will be effective only if transformer return something
 		    if (nextBuffer != null)
