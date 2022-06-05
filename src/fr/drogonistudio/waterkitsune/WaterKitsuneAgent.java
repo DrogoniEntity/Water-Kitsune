@@ -21,6 +21,7 @@ import java.util.List;
 
 import fr.drogonistudio.waterkitsune.plugin.KitsunePlugin;
 import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager;
+import fr.drogonistudio.waterkitsune.plugin.LoadingSimulation;
 import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager;
 
 /**
@@ -69,6 +70,9 @@ public final class WaterKitsuneAgent
 	final KitsunePluginManager pluginManager = new KitsunePluginManager(agentArgs);
 	final LightKitsuneTransformManager lightTransforms = new LightKitsuneTransformManager();
 	
+	LoadingSimulation devPlugin = null;
+	final List<File> pluginsFiles = new ArrayList<>();
+	
 	try
 	{
 	    if (Boolean.parseBoolean(System.getProperty("waterkitsune.openexportall", "false")))
@@ -77,16 +81,38 @@ public final class WaterKitsuneAgent
 		OpenExporterModulesHack.openExport(instr);
 	    }
 	    
+	    if (System.getProperty("waterkitsune.simulate") != null)
+	    {
+		WaterKitsuneLogger.info("Attempt to simulate an plugin !");
+		String simulationConfig = System.getProperty("waterkitsune.simulate");
+		WaterKitsuneLogger.info("Used configuration: %s", simulationConfig);
+		
+		try
+		{
+		    devPlugin = new LoadingSimulation(new File(simulationConfig));
+		    devPlugin.load();
+		    
+		    pluginsFiles.add(devPlugin.getClassesLocation());
+		} catch (Throwable t)
+		{
+		    WaterKitsuneLogger.thrown("Couldn't load plugin to simulate", t);
+		    devPlugin = null;
+		}
+	    }
+	    
 	    // Reading installed plugins
 	    WaterKitsuneLogger.info("Setting up plugins...");
 	    pluginManager.readPlugins();
+	    pluginsFiles.addAll(pluginsFilesList(pluginManager));
 	    
 	    // Setup transformer to allow transforming earlier as possible
 	    WaterKitsuneLogger.info("Adding transformer...");
-	    KitsuneTransformer transformer = new KitsuneTransformer(pluginsFilesList(pluginManager), lightTransforms);
+	    KitsuneTransformer transformer = new KitsuneTransformer(pluginsFiles, lightTransforms);
 	    instr.addTransformer(transformer, instr.isRetransformClassesSupported());
 	    
 	    // Now initialize plugins
+	    if (devPlugin != null)
+		devPlugin.initializePlugin();
 	    pluginManager.loadPlugins(instr);
 	    lightTransforms.lockRegistrations();
 	    

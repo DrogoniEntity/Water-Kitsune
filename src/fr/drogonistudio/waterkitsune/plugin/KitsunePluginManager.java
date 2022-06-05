@@ -350,8 +350,7 @@ public class KitsunePluginManager
 		    {
 			if (this.currentlyToLoad.initializerClassName != null)
 			{
-			    WaterKitsuneLogger.info("Initialize \"%s\" (version %s)...", this.currentlyToLoad.getName(),
-				    this.currentlyToLoad.getVersion());
+			    WaterKitsuneLogger.info("Initialize \"%s\"...", this.currentlyToLoad.toString());
 			    Class<?> initializerClass = Class.forName(this.currentlyToLoad.initializerClassName);
 			    Method initMethod = initializerClass.getMethod("initialize", KitsunePlugin.class);
 			    initMethod.invoke(null, this.currentlyToLoad);

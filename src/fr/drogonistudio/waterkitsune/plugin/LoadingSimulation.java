@@ -1,4 +1,4 @@
-package fr.drogonistudio.waterkitsune.dev;
+package fr.drogonistudio.waterkitsune.plugin;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -12,7 +12,7 @@ import java.util.Objects;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 
-import fr.drogonistudio.waterkitsune.plugin.KitsunePlugin;
+import fr.drogonistudio.waterkitsune.WaterKitsuneLogger;
 
 public class LoadingSimulation
 {
@@ -41,6 +41,27 @@ public class LoadingSimulation
 	
 	this.classesLocation = files.get("classes");
 	this.plugin = plugin;
+    }
+    
+    public void initializePlugin()
+    {
+	if (this.plugin.initializerClassName != null)
+	{
+	    WaterKitsuneLogger.info("[SIMULATION] Initialize \"%s\"...", this.plugin.toString());
+	    
+	    try
+	    {
+		Class<?> initializerClass = Class.forName(this.plugin.initializerClassName);
+		initializerClass.getMethod("initialize", KitsunePlugin.class).invoke(null, this.plugin);
+	    } catch (Throwable fatal)
+	    {
+		WaterKitsuneLogger
+			.thrown(String.format("[SIMULATION] Fatal error occured during \"%s\" initialization.",
+				this.plugin.toString()), fatal);
+	    }
+	    
+	    WaterKitsuneLogger.info("[SIMULATION] \"%s\" initialized.", this.plugin.getName());
+	}
     }
     
     private Map<String, File> loadSimulationInfo() throws IOException, NullPointerException
