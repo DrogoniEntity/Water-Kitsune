@@ -61,6 +61,11 @@ public class KitsunePluginManager
     private static final String DEFAULT_PLUGIN_LIST_FILE = "kitsune-plugins/.enabled";
     
     /**
+     * Plugin meta file's name.
+     */
+    private static final String PLUGIN_INFO_FILE = "kitsune-plugin.info";
+    
+    /**
      * Manager instance.
      * 
      * <p>
@@ -122,8 +127,8 @@ public class KitsunePluginManager
      * Initialize plugin manager.
      * 
      * <p>
-     * It will only setup lists and constants. Plugins are not loaded. If {@code pluginListFile}
-     * is null or empty, the default value is used.
+     * It will only setup lists and constants. Plugins are not loaded. If
+     * {@code pluginListFile} is null or empty, the default value is used.
      * </p>
      * 
      * <p>
@@ -157,14 +162,16 @@ public class KitsunePluginManager
      * Reading list file and loading plugins.
      * 
      * <p>
-     * It will clear plugins list and begin to read plugins files depends
-     * on how their are stored (if plugins are zip file or directory). It will
+     * It will clear plugins list and begin to read plugins files depends on how
+     * their are stored (if plugins are zip file or directory). It will
      * </p>
      * 
-     * @throws IOException if an I/O error occurred.
-     * @throws IllegalStateException if plugins already readed.
+     * @throws IOException
+     *             if an I/O error occurred.
+     * @throws IllegalStateException
+     *             if plugins already readed.
      */
-    public void readPlugins() throws IOException, IllegalStateException
+    public synchronized void readPlugins() throws IOException, IllegalStateException
     {
 	if (this.loadingStatement != PluginLoadingStatement.FILE_NOT_READED)
 	    throw new IllegalStateException("Plugins already readed !");
@@ -180,8 +187,7 @@ public class KitsunePluginManager
 		nextList = this.readPluginsFromDirectory(pluginsListFile);
 	    else
 		nextList = this.readPluginsFromFile(pluginsListFile);
-	}
-	else
+	} else
 	{
 	    boolean hasFoundValidDirectory;
 	    File directoryToUse = pluginsListFile;
@@ -223,15 +229,11 @@ public class KitsunePluginManager
 			pluginFile = new File(parentDirectory, line);
 		    
 		    if (pluginFile.exists())
-		    {
 			if (pluginFile.isDirectory())
-			    error = "Plugin file is a directory";
-		    }
-		    else
-		    {
-			error = "File not found";
-		    }
-		    
+			    error = "File is a directory";
+			else
+			    error = "File not found";
+			
 		    if (error != null)
 			pluginsFiles.add(pluginFile);
 		    else
@@ -272,9 +274,14 @@ public class KitsunePluginManager
 	for (int i = 0; i < files.length; i++)
 	{
 	    File toRead = files[i];
-	    
 	    if (toRead.isDirectory())
+		continue;
+	    
+	    try
 	    {
+		ZipFile isZip = new ZipFile(toRead);
+		isZip.close();
+		
 		try
 		{
 		    KitsunePlugin readed = parsePluginFile(toRead);
@@ -284,26 +291,9 @@ public class KitsunePluginManager
 		    WaterKitsuneLogger.error("Couldn't parse plugin file \"%s\" (%s)", toRead.getName(),
 			    ioEx.getMessage());
 		}
-	    } else
+	    } catch (IOException ignored)
 	    {
-		try
-		{
-		    ZipFile isZip = new ZipFile(toRead);
-		    isZip.close();
-		    
-		    try
-		    {
-			KitsunePlugin readed = parsePluginFile(toRead);
-			plugins.add(new SimpleEntry<>(toRead, readed));
-		    } catch (IOException ioEx)
-		    {
-			WaterKitsuneLogger.error("Couldn't parse plugin file \"%s\" (%s)", toRead.getName(),
-				ioEx.getMessage());
-		    }
-		} catch (IOException ignored)
-		{
-		    // It's not a valid file
-		}
+		// It's not a valid file
 	    }
 	}
 	
@@ -312,28 +302,19 @@ public class KitsunePluginManager
     
     private static KitsunePlugin parsePluginFile(File pluginFile) throws IOException
     {
-	if (pluginFile.isDirectory())
+	ZipFile pluginZip = new ZipFile(pluginFile);
+	try
 	{
-	    File metaFile = new File(pluginFile, "plugin.kitmeta");
-	    if (metaFile.exists())
-		return KitsunePlugin.parseFromFile(metaFile);
-	} else
-	{
-	    ZipFile pluginZip = new ZipFile(pluginFile);
-	    try
-	    {
-		ZipEntry metaEntry = pluginZip.getEntry("plugin.kitmeta");
-		
-		if (metaEntry != null)
-		    return KitsunePlugin.parseFromStream(pluginZip.getInputStream(metaEntry));
-	    } finally
-	    {
-		pluginZip.close();
-	    }
+	    ZipEntry infoEntry = pluginZip.getEntry(PLUGIN_INFO_FILE);
 	    
+	    if (infoEntry != null)
+		return KitsunePlugin.parseFromStream(pluginZip.getInputStream(infoEntry));
+	} finally
+	{
+	    pluginZip.close();
 	}
 	
-	WaterKitsuneLogger.warning("Plugin \"%s\" has no meta file", pluginFile.getName());
+	WaterKitsuneLogger.warning("Plugin \"%s\" has no information file", pluginFile.getName());
 	return new KitsunePlugin(pluginFile.getName());
     }
     
@@ -379,7 +360,9 @@ public class KitsunePluginManager
 			
 		    } catch (Throwable fatal)
 		    {
-			WaterKitsuneLogger.thrown(String.format("Fatal error occured during \"%s\" initialization.", entry.getValue()), fatal);
+			WaterKitsuneLogger.thrown(
+				String.format("Fatal error occured during \"%s\" initialization.", entry.getValue()),
+				fatal);
 		    }
 		}
 		
