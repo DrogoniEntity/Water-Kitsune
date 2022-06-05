@@ -20,7 +20,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleEntry;
@@ -31,10 +30,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.jar.JarFile;
-import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import fr.drogonistudio.waterkitsune.WaterKitsuneLogger;
 
@@ -217,6 +214,7 @@ public class KitsunePluginManager
 		line = line.trim();
 		if (!line.startsWith("#") && !line.isEmpty())
 		{
+		    String error = null;
 		    File pluginFile;
 		    Path filepath = Paths.get(line);
 		    if (filepath.isAbsolute())
@@ -225,9 +223,19 @@ public class KitsunePluginManager
 			pluginFile = new File(parentDirectory, line);
 		    
 		    if (pluginFile.exists())
+		    {
+			if (pluginFile.isDirectory())
+			    error = "Plugin file is a directory";
+		    }
+		    else
+		    {
+			error = "File not found";
+		    }
+		    
+		    if (error != null)
 			pluginsFiles.add(pluginFile);
 		    else
-			WaterKitsuneLogger.error("Plugin file \"%s\" not found", pluginFile.getName());
+			WaterKitsuneLogger.error("Couldn't load file \"%s\": %s", pluginFile.getName(), error);
 		}
 	    }
 	} finally
@@ -329,7 +337,7 @@ public class KitsunePluginManager
 	return new KitsunePlugin(pluginFile.getName());
     }
     
-    public void loadPlugins(Instrumentation instr) throws Exception
+    public synchronized void loadPlugins(Instrumentation instr) throws Exception
     {
 	switch (this.loadingStatement)
 	{
@@ -353,11 +361,6 @@ public class KitsunePluginManager
 		    this.currentlyToLoad = entry.getValue();
 		    
 		    File pluginFile = entry.getKey();
-		    if (pluginFile.isDirectory())
-		    {
-			pluginFile = packFile(pluginFile).toFile();
-			pluginFile.deleteOnExit();
-		    }
 		    
 		    instr.appendToSystemClassLoaderSearch(new JarFile(pluginFile));
 		    System.setProperty("java.class.path", System.getProperty("java.class.path") + classpathSeparator
@@ -460,32 +463,6 @@ public class KitsunePluginManager
     public static final KitsunePluginManager getManager()
     {
 	return instance;
-    }
-    
-    private static Path packFile(File directory) throws IOException
-    {
-	WaterKitsuneLogger.debug(Level.FINE, "Packaging \"%s\"...", directory.getPath());
-	Path tmpPath = Files.createTempFile("waterkitsune-", ".zip");
-	try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(tmpPath)))
-	{
-	    Path source = directory.toPath();
-	    Files.walk(source).filter((path) -> !Files.isDirectory(path)).forEach((path) ->
-	    {
-		try
-		{
-		    ZipEntry entry = new ZipEntry(source.relativize(path).toString());
-		    zipOut.putNextEntry(entry);
-		    Files.copy(path, zipOut);
-		    zipOut.closeEntry();
-		} catch (IOException ioEx)
-		{
-		    WaterKitsuneLogger.error("Couldn't put entry \"%s\" into \"%s\": %s", path.toString(),
-			    tmpPath.toString(), ioEx.getMessage());
-		}
-	    });
-	}
-	
-	return tmpPath;
     }
     
     public static enum PluginLoadingStatement
