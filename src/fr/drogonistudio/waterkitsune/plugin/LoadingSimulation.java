@@ -24,7 +24,7 @@ public class LoadingSimulation
     public LoadingSimulation(File loadingInfoFile) throws NullPointerException, FileNotFoundException
     {
 	Objects.requireNonNull(loadingInfoFile, "Loading information file not specified");
-	if (loadingInfoFile.exists())
+	if (!loadingInfoFile.exists())
 	    throw new FileNotFoundException(loadingInfoFile.getName() + " not found");
 	
 	this.loadingInfoFile = loadingInfoFile;
