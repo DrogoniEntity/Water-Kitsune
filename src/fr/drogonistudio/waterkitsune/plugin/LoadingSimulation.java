@@ -20,6 +20,7 @@ public class LoadingSimulation
     
     private File classesLocation;
     private KitsunePlugin plugin;
+    private LoadingPriority loadingPriority;
     
     public LoadingSimulation(File loadingInfoFile) throws NullPointerException, FileNotFoundException
     {
@@ -78,6 +79,17 @@ public class LoadingSimulation
 	files.put("classes", new File(simulationInfo.getString("classes-location", null)));
 	files.put("info", new File(simulationInfo.getString("info-file", null)));
 	
+	try
+	{
+	    this.loadingPriority = LoadingPriority.valueOf(simulationInfo.getString("loading-priority", LoadingPriority.DEFAULT.name()).toUpperCase());
+	}
+	catch (Throwable notFound)
+	{
+	    WaterKitsuneLogger.warning("Unknown loading priority value: %s", simulationInfo.getString("loading-priority", null).toUpperCase());
+	    WaterKitsuneLogger.warning("Fallback to \"%s\" loading priority...", LoadingPriority.DEFAULT.name());
+	    this.loadingPriority = LoadingPriority.DEFAULT;
+	}
+	
 	return Collections.unmodifiableMap(files);
     }
     
@@ -89,5 +101,18 @@ public class LoadingSimulation
     public File getClassesLocation()
     {
 	return this.classesLocation;
+    }
+    
+    public LoadingPriority getLoadingPriority()
+    {
+	return this.loadingPriority;
+    }
+    
+    public static enum LoadingPriority
+    {
+	HIGH,
+	LOW;
+	
+	public static final LoadingPriority DEFAULT = HIGH;
     }
 }

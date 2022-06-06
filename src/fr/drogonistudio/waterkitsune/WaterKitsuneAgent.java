@@ -22,6 +22,7 @@ import java.util.List;
 import fr.drogonistudio.waterkitsune.plugin.KitsunePlugin;
 import fr.drogonistudio.waterkitsune.plugin.KitsunePluginManager;
 import fr.drogonistudio.waterkitsune.plugin.LoadingSimulation;
+import fr.drogonistudio.waterkitsune.plugin.LoadingSimulation.LoadingPriority;
 import fr.drogonistudio.waterkitsune.transformation.LightKitsuneTransformManager;
 
 /**
@@ -71,6 +72,8 @@ public final class WaterKitsuneAgent
 	final LightKitsuneTransformManager lightTransforms = new LightKitsuneTransformManager();
 	
 	LoadingSimulation devPlugin = null;
+	boolean devPluginIsHigh = false;
+	boolean devPluginIsLow = false;
 	final List<File> pluginsFiles = new ArrayList<>();
 	
 	try
@@ -92,7 +95,8 @@ public final class WaterKitsuneAgent
 		    devPlugin = new LoadingSimulation(new File(simulationConfig));
 		    devPlugin.load();
 		    
-		    pluginsFiles.add(devPlugin.getClassesLocation());
+		    devPluginIsHigh = devPlugin.getLoadingPriority() == LoadingPriority.HIGH;
+		    devPluginIsLow = !devPluginIsHigh;
 		} catch (Throwable t)
 		{
 		    WaterKitsuneLogger.thrown("Couldn't load plugin to simulate", t);
@@ -103,7 +107,12 @@ public final class WaterKitsuneAgent
 	    // Reading installed plugins
 	    WaterKitsuneLogger.info("Setting up plugins...");
 	    pluginManager.readPlugins();
+	    
+	    //@formatter:off
+	    if (devPluginIsHigh) pluginsFiles.add(devPlugin.getClassesLocation());
 	    pluginsFiles.addAll(pluginsFilesList(pluginManager));
+	    if (devPluginIsLow)  pluginsFiles.add(devPlugin.getClassesLocation());
+	    //@formatter:on
 	    
 	    // Setup transformer to allow transforming earlier as possible
 	    WaterKitsuneLogger.info("Adding transformer...");
@@ -111,9 +120,12 @@ public final class WaterKitsuneAgent
 	    instr.addTransformer(transformer, instr.isRetransformClassesSupported());
 	    
 	    // Now initialize plugins
-	    if (devPlugin != null)
-		devPlugin.initializePlugin();
-	    pluginManager.loadPlugins(instr);
+	    //@formatter:off
+	    if (devPluginIsHigh) devPlugin.initializePlugin();
+	    pluginManager.loadPlugins(instr);	    
+	    if (devPluginIsLow)	devPlugin.initializePlugin();
+	    //@formatter:on
+	    
 	    lightTransforms.lockRegistrations();
 	    
 	    // Now, update opened files list since some plugins have been disabled
